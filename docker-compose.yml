@@ -1,0 +1,15 @@
+---
+version: "3.3"
+services:
+  amazon-glue:
+    image: "amazon/aws-glue-libs:glue_libs_3.0.0_image_01"
+    environment:
+      - DISABLE_SSL=true
+    volumes:
+      - .:/home/glue_user/workspace/
+      - ~/.aws:/home/glue_user/.aws
+    ports:
+      - 4040:4040
+      - 18080:18080
+    entrypoint: python3 -m pytest -s
+    

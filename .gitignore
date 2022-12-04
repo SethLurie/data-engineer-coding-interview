@@ -1,0 +1,6 @@
+.terraform
+venv
+utils.zip
+.DS_Store
+.pytest_cache
+__pycache__
