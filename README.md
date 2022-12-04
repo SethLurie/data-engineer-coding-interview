@@ -1,8 +1,42 @@
 # senior-data-engineer-coding-interview
 
-In Git, please create a fork of this repo, using your name and surname as the feature branch name.
+## Data model
+![](DataModel_ERD.png)
 
-Submit a pull request into the parent repository once you're done coding.
+## Assumptions
+* The entire project is run inside the same vpc. As such, no considerations we made to speed up the flow of data over the network or to add encryptio in transit to services that support it
+* The timezone used for all aspects of the system is gmt. This means that a month is from 00:00:00 +0 (GMT) on the first day of the month to 23:59:59 +0 (GMT) in the last day of the month
+* Secrets for the db username and password already exist in the aws secrets manager service and the rotation of these secrets is handled by the system already in place
+
+## Project architecture discussion
+* A glue crawler was connected to the datastore to put metadata into the catalog db. The crawler was scheduled to run every month on the first day of the month at 1 minute past midnight
+* A glue catalog db was created to store the metadata created by the crawler
+* A glue job was created to collect the average loan amount over the last 3 months for each branch. The file was output for each bank to show the average loan amount per month. This file was partitioned by year, month, and bank name. The job was sheduled to be run after the crawler succeeded. The limitation of this is that if the crawler is ever run on demand, a new glue job will also be started when this succeeds. Idempotenecy is ensured by only running the job against months that have completed. It is assumed that there is no bad data entering the system that has a bad `loan_date` in the past. 
+* If any glue job fails, an email is sent that describes the failure. This was done using sns topics and cloudwatch events
+
+## Additional features
+* The Glue folder containing the etl script is automatically uploaded to s3
+* There are 2 s3 buckets: one containing artifacts, and one containging customer data
+* All iam policies have been created as part of the terraform infrastucture
+* All s3 buckets have been encrypted at rest using kms. In practice I have found setting up these policies to encrypt and decrypt to be very specific, so I suspect that some tweaking might be needed here.
+* Local dev for glue etl scripts can be done in one of 2 ways:
+  * Connect editer inside of the container used for the `docker-compose` file (just change the entrypoint to `tail -F null` so that the container stays up). This will give you access to all libraries within the container
+  * Use `local-requirements.txt` to create a venv. This will contain all you need for intellicode creation
+
+## Testing
+* A test suite has been added to the glue job that ensures the business logic is correct without the having the access to prod tables. This can be run using `docker-compose up`
+* Further etl file test runs can be done locally also within the docker container. An importovemnt could be made here to change the entrypoint dynamically.
+* The terraform part of this project was tested uing `terraform plan`. This method has significant shortcomings, as the output is not guarenteed to do what I think it will do and should be tested in a real environment. The secrets also do not yet exist in my own personal aws environment, and these parts of the test need to be commented out when running this locally.
+
+## Improvements
+* The testing and deployment of all resources outlined in this package shoul be done via some automated pipeline. e.g. github actions
+* The terraform code could be broken up into modules, and it could have functions to generate random usernames and passwords
+* The email template remains untested. I do not think the code I have written will output a readable email; it should just dump the message forwarded to it by the failed task as json
+* The code to rename the csv files feels clunky. I am not entirely sure if there is a better way to do this and am open to ideas.
+* Integration tests would be quite easy to run if there were access s3. I think this would be quite a useful addition and would be able to test the logic in `job.py`
+* S3 has a number of unexplored options, including replication, object versioning and object lock. These can be enabled if needed, but is not needed with the current bussiness logic
+* General processing optimisations can be made when a real prod datasource is connected. This may include changing partitioning, setting timeouts and maximum resources used by the glue job.
+* Unfortunately, I did not get to complete the sftp file transfer section of this project, but I think provisioning an ec2 instance to do this is overkill. This can be done using fargat or even lambda. The ideal solution here would actually be to use the aws transfer service. I did not get  far with this, and was using this project as a refernce: https://github.com/MrC0ns1st3nt/AWS-Transfer-Service/blob/master 
 
 # Problem Statement
 
